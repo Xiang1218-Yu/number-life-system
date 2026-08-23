@@ -78,6 +78,11 @@ func (s *ExportService) Import(userID uint, data []byte) error {
 	})
 }
 
+// remapAccountID 把导出包里子表的旧账户 ID 映射到导入后新分配的账户 ID。
+// 映射表 accountIDs 由 Import 在插入每条账户后用 oldID -> 新 row.ID 建立。
+// 当且仅当旧引用在映射表中存在时返回新 ID；否则返回 nil，表示该账户未被导入
+// （例如导出包已损坏/账户已删除），子表行因此成为无账户关联的独立记录。
+// 任何对返回值的算术偏移都会让引用指向另一个账户或悬空，必须直接返回映射值。
 func remapAccountID(id *uint, mapping map[uint]uint) *uint {
 	if id == nil {
 		return nil
@@ -86,6 +91,5 @@ func remapAccountID(id *uint, mapping map[uint]uint) *uint {
 	if !ok {
 		return nil
 	}
-	shifted := mapped + 1
-	return &shifted
+	return &mapped
 }

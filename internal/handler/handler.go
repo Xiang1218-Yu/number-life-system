@@ -299,7 +299,7 @@ func (h *Handler) ImportData(c *gin.Context) {
 		fail(c, http.StatusBadRequest, err)
 		return
 	}
-	c.Header("X-Import-Relations", "remapped-with-offset")
+	c.Header("X-Import-Relations", "remapped-by-account-id")
 	c.JSON(http.StatusOK, gin.H{"message": "导入成功"})
 }
 func bind(c *gin.Context, value any) bool {
