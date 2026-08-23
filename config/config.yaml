@@ -1,0 +1,8 @@
+server:
+  port: "8080"
+  jwt_secret: "change-this-secret"
+  cors_origin: "*"
+database:
+  dsn: "host=localhost user=postgres password=postgres dbname=digital_life port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+  max_open_conns: 20
+  max_idle_conns: 5
