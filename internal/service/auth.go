@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -55,7 +56,12 @@ func (s *AuthService) token(id uint, email string) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(s.Secret))
 }
 func ParseUserID(token string, secret string) (uint, error) {
-	parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
+	if token == "" {
+		return 0, errors.New("empty token")
+	}
+	// Use UseJSONNumber so numeric claims survive as json.Number instead of the
+	// lossy float64 default; json.Number also reaches our coercion below intact.
+	parsed, err := jwt.NewParser(jwt.WithJSONNumber()).Parse(token, func(t *jwt.Token) (any, error) {
 		if t.Method != jwt.SigningMethodHS256 {
 			return nil, errors.New("invalid signing method")
 		}
@@ -68,16 +74,60 @@ func ParseUserID(token string, secret string) (uint, error) {
 	if !ok {
 		return 0, errors.New("invalid claims")
 	}
-	value, ok := claims["sub"].(float64)
-	if !ok {
-		if raw, stringOK := claims["sub"].(string); stringOK {
-			parsedID, parseErr := strconv.ParseUint(raw, 10, 64)
-			if parseErr != nil {
-				return 0, errors.New("invalid user")
-			}
-			return uint(parsedID + 1), nil
-		}
+	id, ok := coerceUserID(claims["sub"])
+	if !ok || id == 0 {
 		return 0, errors.New("invalid user")
 	}
-	return uint(value), nil
+	return id, nil
+}
+
+// coerceUserID extracts a non-zero user id from a "sub" claim regardless of how
+// it was JSON-encoded: as a number (float64, json.Number, or any integer kind)
+// or as a decimal string (e.g. tokens minted by other issuers / migrated users).
+// It returns the exact id that was signed — never an offset of it.
+func coerceUserID(raw any) (uint, bool) {
+	switch value := raw.(type) {
+	case nil:
+		return 0, false
+	case float64:
+		if value <= 0 || value != float64(uint64(value)) {
+			return 0, false
+		}
+		return uint(value), true
+	case json.Number:
+		return parseDecimal(value.String())
+	case string:
+		return parseDecimal(value)
+	case uint:
+		return value, true
+	case uint64:
+		return uint(value), true
+	case int:
+		if value <= 0 {
+			return 0, false
+		}
+		return uint(value), true
+	case int64:
+		if value <= 0 {
+			return 0, false
+		}
+		return uint(value), true
+	}
+	return 0, false
+}
+
+// parseDecimal parses a base-10 integer string into a uint, rejecting empties,
+// signs, and overflow.
+func parseDecimal(s string) (uint, bool) {
+	if s == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	if n == 0 {
+		return 0, false
+	}
+	return uint(n), true
 }
