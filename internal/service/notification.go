@@ -163,10 +163,21 @@ func (s *NotificationService) refreshAccounts(userID uint) (int, error) {
 	return created, nil
 }
 
+// createOnce 为单个来源记录生成至多一条提醒。去重键为 (user_id, type, reference_id)：
+// 同一条订阅/备份/账户在反复刷新时只保留一条（幂等），但不同条目即使 due_at 完全相同
+// 也各自独立保留，避免同一来源内多条到期事项互相覆盖。
 func (s *NotificationService) createOnce(userID uint, kind string, referenceID uint, title, message string, due time.Time) (bool, error) {
 	var existing domain.Notification
-	err := s.DB.Where("user_id = ? AND type = ? AND title = ? AND due_at = ?", userID, kind, title, due).First(&existing).Error
+	err := s.DB.Where("user_id = ? AND type = ? AND reference_id = ?", userID, kind, referenceID).First(&existing).Error
 	if err == nil {
+		// 同一条记录已有提醒：若到期时间发生变化（例如订阅/备份被改期），更新 due_at，保证窗口始终反映最新到期点。
+		if !existing.DueAt.Equal(due) {
+			existing.DueAt = due
+			existing.Title = title
+			existing.Message = fmt.Sprintf("%s [记录:%d]", message, referenceID)
+			existing.Status = "pending"
+			return true, s.DB.Model(&domain.Notification{}).Where("id = ?", existing.ID).Updates(map[string]any{"due_at": due, "title": title, "message": existing.Message, "status": "pending"}).Error
+		}
 		return false, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {

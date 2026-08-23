@@ -27,6 +27,15 @@ func Open(cfg config.Config) (*gorm.DB, error) {
 	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_notifications_reference ON notifications (user_id, reference_id)").Error; err != nil {
 		return nil, err
 	}
+	// 与 createOnce 的去重键 (user_id, type, reference_id) 对齐：先幂等清理历史重复行，再建唯一索引。
+	// 保留每组最早一条，其余删除。这能修复旧逻辑下因 due_at 不同而残留的重复通知。
+	if err := db.Exec(`DELETE FROM notifications a USING notifications b
+WHERE a.user_id = b.user_id AND a.type = b.type AND a.reference_id = b.reference_id AND a.id > b.id`).Error; err != nil {
+		return nil, err
+	}
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_user_type_reference ON notifications (user_id, type, reference_id)").Error; err != nil {
+		return nil, err
+	}
 	return db, nil
 }
 func seedCategories(db *gorm.DB) error {
