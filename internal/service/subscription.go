@@ -116,12 +116,15 @@ func nextBilling(start time.Time, cycle string) time.Time {
 	return start.AddDate(0, 1, 0)
 }
 
+// monthlyAmount 把订阅金额折算为每月支出，与 Overview 的月度口径一致：
+// 年付均摊到 12 个月，季付均摊到 3 个月，月付保持不变。
 func monthlyAmount(cycle string, amount float64) float64 {
-	if cycle == "year" {
+	switch cycle {
+	case "year":
+		return amount / 12
+	case "quarter":
+		return amount / 3
+	default:
 		return amount
 	}
-	if cycle == "quarter" {
-		return amount / 3
-	}
-	return amount
 }

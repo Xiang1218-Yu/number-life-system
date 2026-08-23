@@ -70,24 +70,44 @@ func (s *StatsService) SubscriptionTrend(userID uint, months int) ([]MonthlyCost
 	if months < 1 || months > 24 {
 		months = 6
 	}
+	// 纳入全部订阅（含已取消），按 CancelledAt 在历史月份中截止，
+	// 这样取消订阅不会从所有历史月份中被抹除，趋势才是真实的月度支出回顾。
 	var subscriptions []domain.Subscription
-	if err := s.DB.Where("user_id = ? AND status != ?", userID, "cancelled").Find(&subscriptions).Error; err != nil {
+	if err := s.DB.Where("user_id = ?", userID).Find(&subscriptions).Error; err != nil {
 		return nil, err
 	}
 	result := make([]MonthlyCost, 0, months)
 	now := time.Now()
+	// 以当前自然月首日为终点向前回溯，每个月对齐到月初。
+	// 这样同一日历月的边界与 months 参数无关，各周期金额不再随查看范围跳动。
+	anchor := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	for index := months - 1; index >= 0; index-- {
-		month := now.AddDate(0, -index, 0)
-		amount := 0.0
-		for _, row := range subscriptions {
-			if row.StartedAt != nil && row.StartedAt.Before(month) {
-				continue
-			}
-			amount += monthlyAmount(row.Cycle, row.Amount)
-		}
-		result = append(result, MonthlyCost{Month: month.Format("2006-01"), Amount: amount})
+		monthStart := anchor.AddDate(0, -index, 0)
+		result = append(result, MonthlyCost{
+			Month:  monthStart.Format("2006-01"),
+			Amount: monthSubscriptionAmount(subscriptions, monthStart),
+		})
 	}
 	return result, nil
+}
+
+// monthSubscriptionAmount 汇总订阅在某自然月内的折算月度支出。
+// 订阅在该月计入的条件：该月结束前已开始，且该月开始前尚未取消。
+func monthSubscriptionAmount(subscriptions []domain.Subscription, monthStart time.Time) float64 {
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	amount := 0.0
+	for _, row := range subscriptions {
+		// 在该月开始前已取消 -> 不计入本月
+		if row.CancelledAt != nil && row.CancelledAt.Before(monthStart) {
+			continue
+		}
+		// 在该月结束之后才开始 -> 尚未生效，不计入本月
+		if row.StartedAt != nil && !row.StartedAt.Before(monthEnd) {
+			continue
+		}
+		amount += monthlyAmount(row.Cycle, row.Amount)
+	}
+	return amount
 }
 func storage(rows []domain.DataLocation) float64 {
 	total := 0.0
