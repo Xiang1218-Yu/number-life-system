@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>数字生活档案</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="auth" class="auth-shell">
+<div class="auth-copy"><span class="eyebrow">DIGITAL LIFE ARCHIVE</span><h1>把散落在网络里的自己，整理成一份清晰档案。</h1><p>账户、订阅、数据、备份和安全状态，在一个安静而可靠的空间里持续更新。</p></div>
+<div class="auth-card"><div class="brand-mark">NL</div><h2 id="auth-title">登录档案</h2><form id="auth-form"><label>邮箱<input id="auth-email" type="email" required placeholder="you@example.com"></label><label id="name-field" class="hidden">称呼<input id="auth-name" type="text" placeholder="你的名字"></label><label>密码<input id="auth-password" type="password" required minlength="8" placeholder="至少 8 位"></label><button class="primary" type="submit">进入系统</button></form><button id="auth-switch" class="text-button">还没有档案？创建一个</button><p id="auth-error" class="error"></p></div>
+</div>
+<div id="app" class="app-shell hidden">
+<aside class="sidebar"><div class="brand"><span class="brand-mark">NL</span><div><strong>Number Life</strong><small>个人数字档案</small></div></div><nav><button class="nav-item active" data-view="overview"><span>01</span>总览</button><button class="nav-item" data-view="accounts"><span>02</span>账户</button><button class="nav-item" data-view="subscriptions"><span>03</span>订阅</button><button class="nav-item" data-view="data"><span>04</span>数据分布</button><button class="nav-item" data-view="footprints"><span>05</span>数字足迹</button><button class="nav-item" data-view="security"><span>06</span>安全审计</button><button class="nav-item" data-view="backups"><span>07</span>备份计划</button></nav><div class="sidebar-bottom"><button id="export-btn" class="outline-button">导出 JSON</button><button id="logout-btn" class="text-button">退出登录</button></div></aside>
+<main class="main"><header class="topbar"><div><span class="eyebrow">YOUR DIGITAL LIFE</span><h2 id="view-title">数字生活总览</h2></div><div class="user-chip"><span id="user-avatar">N</span><span id="user-name">访客</span></div></header><section id="view-overview" class="view"></section><section id="view-accounts" class="view hidden"></section><section id="view-subscriptions" class="view hidden"></section><section id="view-data" class="view hidden"></section><section id="view-footprints" class="view hidden"></section><section id="view-security" class="view hidden"></section><section id="view-backups" class="view hidden"></section></main>
+</div>
+<div id="toast" class="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
