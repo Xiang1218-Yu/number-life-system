@@ -1,6 +1,8 @@
 # number-life-system
 
-项目用途：个人数字生活档案系统，使用 Go、Gin、GORM、PostgreSQL 和原生 HTML/CSS/JavaScript 构建。项目源代码、依赖描述和评测专用 Docker 文件共同构成自包含任务；不依赖本机预编译二进制。
+基于 Go 实现的Number Life Web 项目，一款后端服务，个人数字生活档案系统，使用 Go、Gin、GORM、PostgreSQL 和原生 HTML/CSS/JavaScript 构建。
+
+项目源代码、依赖描述和评测专用 Docker 文件共同构成自包含任务；不依赖本机预编译二进制。
 
 ## 标准构建、运行和测试命令
 

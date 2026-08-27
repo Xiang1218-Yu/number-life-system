@@ -11,19 +11,19 @@ import (
 
 type AccountService struct{ DB *gorm.DB }
 type AccountInput struct {
-	Platform          string     `json:"platform" binding:"required"`
-	Username          string     `json:"username" binding:"required"`
-	Email             string     `json:"email"`
-	Category          string     `json:"category" binding:"required"`
-	RegisteredAt      *time.Time `json:"registered_at"`
-	Password          string     `json:"password"`
-	PasswordStrength  string     `json:"password_strength"`
-	PasswordChangedAt *time.Time `json:"password_changed_at"`
-	TwoFactorEnabled  bool       `json:"two_factor_enabled"`
-	KnownBreach       bool       `json:"known_breach"`
-	LastLoginAt       *time.Time `json:"last_login_at"`
-	Notes             string     `json:"notes"`
-	Status            string     `json:"status"`
+	Platform          string       `json:"platform" binding:"required"`
+	Username          string       `json:"username" binding:"required"`
+	Email             string       `json:"email"`
+	Category          string       `json:"category" binding:"required"`
+	RegisteredAt      FlexibleTime `json:"registered_at"`
+	Password          string       `json:"password"`
+	PasswordStrength  string       `json:"password_strength"`
+	PasswordChangedAt FlexibleTime `json:"password_changed_at"`
+	TwoFactorEnabled  bool         `json:"two_factor_enabled"`
+	KnownBreach       bool         `json:"known_breach"`
+	LastLoginAt       FlexibleTime `json:"last_login_at"`
+	Notes             string       `json:"notes"`
+	Status            string       `json:"status"`
 }
 
 type AccountFilter struct {
@@ -80,15 +80,7 @@ func (s *AccountService) Create(userID uint, input AccountInput) (domain.Account
 	if err := validateAccountInput(input); err != nil {
 		return domain.Account{}, err
 	}
-	if input.LastLoginAt != nil && input.LastLoginAt.After(time.Now()) {
-		now := time.Now()
-		input.LastLoginAt = &now
-	}
-	if input.PasswordChangedAt != nil && input.PasswordChangedAt.After(time.Now()) {
-		now := time.Now()
-		input.PasswordChangedAt = &now
-	}
-	row := domain.Account{UserID: userID, Platform: input.Platform, Username: input.Username, Email: input.Email, Category: input.Category, RegisteredAt: input.RegisteredAt, PasswordChangedAt: input.PasswordChangedAt, TwoFactorEnabled: input.TwoFactorEnabled, KnownBreach: input.KnownBreach, LastLoginAt: input.LastLoginAt, Notes: input.Notes, Status: "active", PasswordStrength: password.Strength(input.Password)}
+	row := domain.Account{UserID: userID, Platform: input.Platform, Username: input.Username, Email: input.Email, Category: input.Category, RegisteredAt: input.RegisteredAt.Time(), PasswordChangedAt: input.PasswordChangedAt.Time(), TwoFactorEnabled: input.TwoFactorEnabled, KnownBreach: input.KnownBreach, LastLoginAt: input.LastLoginAt.Time(), Notes: input.Notes, Status: "active", PasswordStrength: password.Strength(input.Password)}
 	if input.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -107,8 +99,16 @@ func (s *AccountService) Update(userID, id uint, input AccountInput) (domain.Acc
 	if err != nil {
 		return row, err
 	}
-	row.Platform, row.Username, row.Email, row.Category, row.RegisteredAt, row.PasswordChangedAt = input.Platform, input.Username, input.Email, input.Category, input.RegisteredAt, input.PasswordChangedAt
-	row.TwoFactorEnabled, row.KnownBreach, row.LastLoginAt, row.Notes = input.TwoFactorEnabled, input.KnownBreach, input.LastLoginAt, input.Notes
+	row.Platform, row.Username, row.Email, row.Category, row.Notes = input.Platform, input.Username, input.Email, input.Category, input.Notes
+	row.TwoFactorEnabled, row.KnownBreach = input.TwoFactorEnabled, input.KnownBreach
+	// Time fields are optional: a provided value (date-only or RFC3339) overwrites
+	// the stored value; an omitted/empty value leaves the stored value intact so
+	// re-saving the same record cannot wipe a previously recorded login or
+	// password-change time and silently flip the security score. Validation has
+	// already rejected future timestamps, so the stored value equals the input.
+	row.RegisteredAt = mergeAccountTime(row.RegisteredAt, input.RegisteredAt.Time())
+	row.PasswordChangedAt = mergeAccountTime(row.PasswordChangedAt, input.PasswordChangedAt.Time())
+	row.LastLoginAt = mergeAccountTime(row.LastLoginAt, input.LastLoginAt.Time())
 	if input.Password != "" {
 		hash, hashErr := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 		if hashErr != nil {
@@ -118,6 +118,17 @@ func (s *AccountService) Update(userID, id uint, input AccountInput) (domain.Acc
 	}
 	err = s.DB.Save(&row).Error
 	return row, err
+}
+
+// mergeAccountTime applies a user-supplied time on top of an existing stored
+// value. A nil input means "not provided" and preserves the stored value, so an
+// update that omits an optional time field does not clear it. A non-nil input
+// replaces the stored value with exactly what the user entered.
+func mergeAccountTime(stored, input *time.Time) *time.Time {
+	if input == nil {
+		return stored
+	}
+	return input
 }
 func (s *AccountService) Delete(userID, id uint) error {
 	result := s.DB.Model(&domain.Account{}).Where("user_id = ? AND id = ?", userID, id).Updates(map[string]any{"status": "archived", "archived_at": time.Now(), "archive_reason": "手动归档"})

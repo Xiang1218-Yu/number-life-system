@@ -35,14 +35,29 @@ func validateAccountInput(input AccountInput) error {
 			return errors.New("注册邮箱格式不正确")
 		}
 	}
-	if input.RegisteredAt != nil && input.RegisteredAt.After(time.Now()) {
-		return errors.New("注册日期不能晚于当前时间")
-	}
-	if input.LastLoginAt != nil && input.LastLoginAt.After(time.Now().AddDate(0, 0, 30)) {
-		return errors.New("上次登录时间不能远期超过30天")
+	if err := validateAccountTimes(input); err != nil {
+		return err
 	}
 	if input.Category == "" {
 		return errors.New("账户分类不能为空")
+	}
+	return nil
+}
+
+// validateAccountTimes rejects future timestamps for the three date fields.
+// Login, password-change and registration dates are historical facts, so a
+// future value is rejected (rather than silently clamped) so the stored record
+// equals what the user entered and the security score stays stable. Shared by
+// the form/API path and the CSV import path.
+func validateAccountTimes(input AccountInput) error {
+	if registeredAt := input.RegisteredAt.Time(); registeredAt != nil && registeredAt.After(time.Now()) {
+		return errors.New("注册日期不能晚于当前时间")
+	}
+	if lastLoginAt := input.LastLoginAt.Time(); lastLoginAt != nil && lastLoginAt.After(time.Now()) {
+		return errors.New("上次登录时间不能晚于当前时间")
+	}
+	if passwordChangedAt := input.PasswordChangedAt.Time(); passwordChangedAt != nil && passwordChangedAt.After(time.Now()) {
+		return errors.New("改密时间不能晚于当前时间")
 	}
 	return nil
 }

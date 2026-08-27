@@ -112,18 +112,25 @@ func (s *CSVService) ImportAccounts(userID uint, data []byte) (ImportResult, err
 			result.Errors = append(result.Errors, fmt.Sprintf("第%d行: %v", line, convertErr))
 			continue
 		}
+		// Apply the same future-timestamp rule as the form/API path so an
+		// imported login/change/registration date cannot lie in the future and
+		// later be misread by the activity check.
+		if err := validateAccountTimes(input); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("第%d行: %v", line, err))
+			continue
+		}
 		row := domain.Account{
 			UserID:            userID,
 			Platform:          input.Platform,
 			Username:          input.Username,
 			Email:             input.Email,
 			Category:          input.Category,
-			RegisteredAt:      input.RegisteredAt,
+			RegisteredAt:      input.RegisteredAt.Time(),
 			PasswordStrength:  input.PasswordStrength,
-			PasswordChangedAt: input.PasswordChangedAt,
+			PasswordChangedAt: input.PasswordChangedAt.Time(),
 			TwoFactorEnabled:  input.TwoFactorEnabled,
 			KnownBreach:       input.KnownBreach,
-			LastLoginAt:       input.LastLoginAt,
+			LastLoginAt:       input.LastLoginAt.Time(),
 			Notes:             input.Notes,
 			Status:            normalizeAccountStatus(input.Status),
 		}
@@ -182,12 +189,12 @@ func accountCSVInput(record []string) (AccountInput, error) {
 		Username:          strings.TrimSpace(record[1]),
 		Email:             strings.TrimSpace(record[2]),
 		Category:          strings.TrimSpace(record[3]),
-		RegisteredAt:      registeredAt,
+		RegisteredAt:      NewFlexibleTime(registeredAt),
 		PasswordStrength:  strings.TrimSpace(record[5]),
-		PasswordChangedAt: passwordChangedAt,
+		PasswordChangedAt: NewFlexibleTime(passwordChangedAt),
 		TwoFactorEnabled:  twoFactor,
 		KnownBreach:       breach,
-		LastLoginAt:       lastLoginAt,
+		LastLoginAt:       NewFlexibleTime(lastLoginAt),
 		Notes:             strings.TrimSpace(record[10]),
 		Status:            strings.TrimSpace(record[11]),
 	}
@@ -221,12 +228,11 @@ func normalizeAccountStatus(value string) string {
 }
 
 func parseCSVTime(value string) (*time.Time, error) {
-	if strings.TrimSpace(value) == "" {
-		return nil, nil
-	}
-	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	// Accept both date-only ("2006-01-02") and full RFC3339 so CSV imports of a
+	// calendar date work the same as the web form.
+	parsed, err := parseFlexibleTime(strings.TrimSpace(value))
 	if err != nil {
 		return nil, err
 	}
-	return &parsed, nil
+	return parsed, nil
 }
